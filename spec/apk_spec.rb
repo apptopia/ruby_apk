@@ -1,6 +1,6 @@
 require File.expand_path(File.dirname(__FILE__) + '/spec_helper')
 require 'tempfile'
-require 'zip/zip'
+require 'zip'
 require 'digest/sha1'
 require 'digest/sha2'
 require 'digest/md5'
@@ -18,12 +18,12 @@ class TempApk
     File.unlink(@path) if File.exist? @path
   end
   def append(entry_name, data)
-    Zip::ZipFile.open(@path, Zip::ZipFile::CREATE) { |zip|
+    Zip::File.open(@path, Zip::File::CREATE) { |zip|
       zip.get_output_stream(entry_name) {|f| f.write data }
     }
   end
   def remove(entry_name)
-    Zip::ZipFile.open(@path, Zip::ZipFile::CREATE) { |zip|
+    Zip::File.open(@path, Zip::File::CREATE) { |zip|
       zip.remove(entry_name)
     }
   end
@@ -96,15 +96,15 @@ describe Android::Apk do
 
   describe "#dex" do
     let(:mock_dex) { mock(Android::Dex) }
-    subject { apk.dex }
+    subject { apk.dexes }
     context "when there is no dex file" do
-      it { should be_nil }
+      it { should be_empty }
     end
     context "when invalid dex file" do
       before do
         tmp_apk.append("classes.dex", "invalid dex")
       end
-      it { should be_nil }
+      it { should be_empty }
     end
     context "with mock classes.dex file" do
       before do
@@ -112,7 +112,7 @@ describe Android::Apk do
       end
       it "should return mock value" do
         Android::Dex.should_receive(:new).with("mock data").and_return(mock_dex)
-        subject.should == mock_dex
+        subject.first.should == mock_dex
       end
     end
     context "with real classes.dex file" do
@@ -120,7 +120,8 @@ describe Android::Apk do
         dex_path = File.expand_path(File.dirname(__FILE__) + '/data/sample_classes.dex')
         tmp_apk.append("classes.dex", File.open(dex_path, "rb") {|f| f.read })
       end
-      it { should be_instance_of Android::Dex }
+      it { should be_kind_of(Array) }
+      its(:first) { should be_kind_of(Android::Dex) }
     end
   end
 
@@ -228,14 +229,14 @@ describe Android::Apk do
     before do
       tmp_apk.append("hoge.txt", "aaaaaaa")
     end
-    it { expect { |b| apk.each_entry(&b) }.to yield_successive_args(Zip::ZipEntry, Zip::ZipEntry, Zip::ZipEntry) }
+    it { expect { |b| apk.each_entry(&b) }.to yield_successive_args(Zip::Entry, Zip::Entry, Zip::Entry) }
   end
 
   describe '#entry' do
     subject { apk.entry(entry_name) }
     context 'assigns exist entry' do
       let(:entry_name) { 'AndroidManifest.xml' }
-      it { should be_instance_of Zip::ZipEntry }
+      it { should be_instance_of Zip::Entry }
     end
     context 'assigns not exist entry name' do
       let(:entry_name) { 'not_exist_path' }
