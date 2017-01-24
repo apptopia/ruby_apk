@@ -1,4 +1,4 @@
-require 'zip/zip' # need rubyzip gem -> doc: http://rubyzip.sourceforge.net/
+require 'zip' # need rubyzip gem -> doc: http://rubyzip.sourceforge.net/
 require 'digest/md5'
 require 'digest/sha1'
 require 'digest/sha2'
@@ -18,7 +18,7 @@ module Android
     attr_reader  :manifest
     # @return [Android::Dex] dex instance
     # @return [nil] when parsing dex is failed.
-    attr_reader :dex
+    attr_reader :dexes
     # @return [String] binary data of apk
     attr_reader :bindata
     # @return [Resource] resouce data
@@ -27,8 +27,7 @@ module Android
 
     # AndroidManifest file name
     MANIFEST = 'AndroidManifest.xml'
-    # dex file name
-    DEX = 'classes.dex'
+
     # resource file name
     RESOURCE = 'resources.arsc'
 
@@ -40,7 +39,7 @@ module Android
       @path = filepath
       raise NotFoundError, "'#{filepath}'" unless File.exist? @path
       begin
-        @zip = Zip::ZipFile.open(@path)
+        @zip = Zip::File.open(@path)
       rescue Zip::ZipError => e
         raise NotApkFileError, e.message 
       end
@@ -60,12 +59,8 @@ module Android
         $stderr.puts "failed to parse manifest:#{e}"
         #$stderr.puts e.backtrace
       end
-      begin
-        @dex = Android::Dex.new(self.file(DEX))
-      rescue => e
-        $stderr.puts "failed to parse dex:#{e}"
-        #$stderr.puts e.backtrace
-      end
+
+      @dexes = (0..128).map{|i| Android::Dex.new(self.file(dex_file_name(i))) rescue nil }.compact
     end
 
     # return apk file size
@@ -126,7 +121,7 @@ module Android
 
     # find and return zip entry with name
     # @param [String] name file name in apk(fullpath)
-    # @return [Zip::ZipEntry] zip entry object
+    # @return [Zip::Entry] zip entry object
     # @raise [NotFoundError] when 'name' doesn't exist in the apk
     def entry(name)
       entry = @zip.find_entry(name)
@@ -201,6 +196,15 @@ module Android
     # @since 0.7.0
     def certificates
       return Hash[self.signs.map{|path, sign| [path, sign.certificates.first] }]
+    end
+
+    private
+    def dex_file_name(i)
+      if i == 0
+        'classes.dex'
+      else
+        "classes#{i}.dex"
+      end
     end
   end
 end
